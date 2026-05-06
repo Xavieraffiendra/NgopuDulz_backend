@@ -2,31 +2,46 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
+use MongoDB\Laravel\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Str; // <-- WAJIB TAMBAH INI
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, Notifiable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    protected $connection = 'mongodb';
+    protected $collection = 'users';
+
+    protected $fillable = ['name', 'email', 'password', 'role'];
+    protected $hidden = ['password', 'remember_token'];
+
+    protected function casts(): array {
+        return ['email_verified_at' => 'datetime', 'password' => 'hashed'];
+    }
+
+    // --- JALAN NINJA: BAJAK FUNGSI CETAK TOKEN ---
+    public function createToken(string $name, array $abilities = ['*'], \DateTimeInterface $expiresAt = null)
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        $plainTextToken = Str::random(40);
+
+        // Simpan ke MongoDB
+        $token = $this->tokens()->create([
+            'name' => $name,
+            'token' => hash('sha256', $plainTextToken),
+            'abilities' => $abilities,
+            'expires_at' => $expiresAt,
+        ]);
+
+        // Berikan object balasan palsu agar Sanctum berhenti mengeluh "TypeError"
+        return new class($token, $token->getKey().'|'.$plainTextToken) {
+            public $accessToken;
+            public $plainTextToken;
+            public function __construct($accessToken, $plainTextToken) {
+                $this->accessToken = $accessToken;
+                $this->plainTextToken = $plainTextToken;
+            }
+        };
     }
 }

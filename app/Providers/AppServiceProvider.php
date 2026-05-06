@@ -3,22 +3,17 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Sanctum;
+// PANGGIL MODEL BARU KITA
+use App\Models\MongoSanctumToken; 
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
-    public function register(): void
-    {
-        //
-    }
+    public function register(): void {}
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        //
+        // Paksa Sanctum pakai model MongoDB kita
+        Sanctum::usePersonalAccessTokenModel(MongoSanctumToken::class);
     }
 }
