@@ -62,4 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Menghapus user
     Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);
 
+    Route::put('/admin/products/{id}', [ProductController::class, 'update']);
+    Route::delete('/admin/products/{id}', [ProductController::class, 'destroy']);
+
 });
