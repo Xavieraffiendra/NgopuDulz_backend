@@ -8,36 +8,30 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    // Fungsi untuk User & Kasir melihat semua menu kopi
+    // Menampilkan semua produk yang tersedia ke Home Android
     public function index()
     {
         $products = Product::where('is_available', true)->get();
+        
         return response()->json([
-            'message' => 'Berhasil mengambil data produk',
+            'message' => 'Berhasil mengambil daftar menu',
             'data' => $products
         ]);
     }
 
-    // Fungsi untuk Admin menambahkan menu baru
+    // Admin menambahkan produk baru
     public function store(Request $request)
     {
         $request->validate([
             'name' => 'required|string',
-            'price' => 'required|numeric',
-            'category' => 'required|string',
+            'price' => 'required|integer',
+            'category' => 'required|string'
         ]);
 
-        $product = Product::create([
-            'name' => $request->name,
-            'description' => $request->description ?? '',
-            'price' => $request->price,
-            'category' => $request->category,
-            'image_url' => $request->image_url ?? '',
-            'is_available' => true
-        ]);
+        $product = Product::create($request->all());
 
         return response()->json([
-            'message' => 'Produk baru berhasil ditambahkan',
+            'message' => 'Menu baru berhasil ditambahkan',
             'data' => $product
         ], 201);
     }

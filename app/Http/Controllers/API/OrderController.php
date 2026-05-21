@@ -4,75 +4,79 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
-    // ---------------------------------------------------
-    // FITUR UNTUK USER (CUSTOMER)
-    // ---------------------------------------------------
-
-    // 1. User membuat pesanan baru
+    // Fungsi Checkout Pesanan dari Android
     public function store(Request $request)
     {
         $request->validate([
-            'items' => 'required|array', // Harus berupa array (daftar belanjaan)
-            'total_price' => 'required|numeric'
+            'total_price' => 'required|integer',
+            'items' => 'required|array',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.qty' => 'required|integer|min:1',
+            'items.*.subtotal' => 'required|integer',
         ]);
 
-        $order = Order::create([
-            'user_id' => $request->user()->_id, // Mengambil ID user yang sedang login
-            'customer_name' => $request->user()->name,
-            'items' => $request->items,
-            'total_price' => $request->total_price,
-            'status' => 'pending' // Status awal pesanan masuk
-        ]);
+        // Mengaktifkan Database Transaction demi integritas data relasional
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Pesanan berhasil dibuat, silakan tunggu!',
-            'data' => $order
-        ], 201);
-    }
+        try {
+            // 1. Simpan data ke tabel induk (orders)
+            $order = Order::create([
+                'user_id' => \Illuminate\Support\Facades\Auth::id(), // Mengambil ID pengguna dari Bearer Token
+                'total_price' => $request->total_price,
+                'status' => 'pending',
+                'payment_method' => $request->payment_method ?? 'Cash',
+                'payment_status' => 'pending'
+            ]);
 
-    // 2. User melihat riwayat pesanannya sendiri
-    public function myOrders(Request $request)
-    {
-        // Cari pesanan yang user_id nya sama dengan user yang login
-        $orders = Order::where('user_id', $request->user()->_id)->orderBy('created_at', 'desc')->get();
-        return response()->json(['data' => $orders]);
-    }
+            // 2. Looping array items untuk disimpan ke tabel anak (order_items)
+            foreach ($request->items as $item) {
+                OrderItem::create([
+                    'order_id' => $order->id(), // Menghubungkan ID dari order yang baru dibuat
+                    'product_id' => $item['product_id'],
+                    'qty' => $item['qty'],
+                    'selected_variants' => $item['selected_variants'] ?? null, // Otomatis dicast jadi array oleh model
+                    'subtotal' => $item['subtotal']
+                ]);
+            }
 
+            // Jika semua proses insert sukses, kunci data di MySQL
+            DB::commit();
 
-    // ---------------------------------------------------
-    // FITUR UNTUK KASIR
-    // ---------------------------------------------------
+            return response()->json([
+                'message' => 'Pesanan berhasil dibuat!',
+                'order_id' => $order->id(),
+                'total_price' => $order->total_price
+            ], 201);
 
-    // 3. Kasir melihat semua pesanan yang masuk (Pending / Diproses)
-    public function indexCashier()
-    {
-        // Kasir hanya perlu melihat pesanan yang belum selesai
-        $orders = Order::whereIn('status', ['pending', 'diproses'])->orderBy('created_at', 'asc')->get();
-        return response()->json(['data' => $orders]);
-    }
+        } catch (\Exception $e) {
+            // Jika ada satu saja yang gagal/error, batalkan semua perubahan di DB
+            DB::rollback();
 
-    // 4. Kasir mengubah status pesanan (Terima Pesanan / Selesai)
-    public function updateStatus(Request $request, $id)
-    {
-        $request->validate([
-            'status' => 'required|in:pending,diproses,selesai'
-        ]);
-
-        $order = Order::find($id);
-        if (!$order) {
-            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+            return response()->json([
+                'message' => 'Gagal memproses transaksi',
+                'error' => $e->getMessage()
+            ], 500);
         }
+    }
 
-        $order->status = $request->status;
-        $order->save();
+    // Riwayat Pesanan untuk sisi Pelanggan di Android
+    public function history()
+    {
+        // Mengambil data order milik user yang sedang login beserta detail item yang dibeli
+        $orders = Order::with('items.product')
+            ->where('user_id', auth()->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json([
-            'message' => 'Status pesanan berhasil diubah menjadi: ' . $request->status,
-            'data' => $order
+            'message' => 'Berhasil mengambil riwayat pesanan',
+            'data' => $orders
         ]);
     }
 }

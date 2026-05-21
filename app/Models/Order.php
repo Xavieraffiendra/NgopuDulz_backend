@@ -2,18 +2,30 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    protected $connection = 'mongodb';
-    protected $collection = 'orders';
+    use HasFactory;
 
     protected $fillable = [
-        'user_id', 
-        'customer_name', 
-        'items',        // Akan berisi array daftar kopi yang dibeli
-        'total_price', 
-        'status'        // pending, diproses, selesai
+        'user_id',
+        'total_price',
+        'status',
+        'payment_method',
+        'payment_status'
     ];
+
+    // Relasi: 1 Order dimiliki oleh 1 User
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    // Relasi: 1 Order memiliki BANYAK OrderItem (Pengganti Embedded Mongo)
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
 }

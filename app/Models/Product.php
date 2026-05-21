@@ -2,19 +2,26 @@
 
 namespace App\Models;
 
-use MongoDB\Laravel\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
-    protected $connection = 'mongodb';
-    protected $collection = 'products';
+    use HasFactory;
 
+    // Kolom apa saja yang boleh diisi (Mass Assignment)
     protected $fillable = [
-        'name', 
-        'description', 
-        'price', 
-        'category', // Contoh: Kopi, Non-Kopi, Snack
-        'image_url', 
-        'is_available' // true jika stok ada, false jika habis
+        'name',
+        'description',
+        'price',
+        'image_url',
+        'category',
+        'is_available'
     ];
+
+    // Relasi: 1 Produk bisa ada di banyak OrderItem
+    public function orderItems()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
 }
