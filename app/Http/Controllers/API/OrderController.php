@@ -37,7 +37,7 @@ class OrderController extends Controller
             // 2. Looping array items untuk disimpan ke tabel anak (order_items)
             foreach ($request->items as $item) {
                 OrderItem::create([
-                    'order_id' => $order->id(), // Menghubungkan ID dari order yang baru dibuat
+                    'order_id' => $order->id, // Menghubungkan ID dari order yang baru dibuat
                     'product_id' => $item['product_id'],
                     'qty' => $item['qty'],
                     'selected_variants' => $item['selected_variants'] ?? null, // Otomatis dicast jadi array oleh model
@@ -50,7 +50,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Pesanan berhasil dibuat!',
-                'order_id' => $order->id(),
+                'order_id' => $order->id,
                 'total_price' => $order->total_price
             ], 201);
 
@@ -66,7 +66,7 @@ class OrderController extends Controller
     }
 
     // Riwayat Pesanan untuk sisi Pelanggan di Android
-    public function history()
+    public function myOrders()
     {
         // Mengambil data order milik user yang sedang login beserta detail item yang dibeli
         $orders = Order::with('items.product')
@@ -77,6 +77,43 @@ class OrderController extends Controller
         return response()->json([
             'message' => 'Berhasil mengambil riwayat pesanan',
             'data' => $orders
+        ]);
+    }
+    public function indexCashier()
+    {
+        $orders = Order::with(['user:id,name', 'items.product:id,name'])
+            ->where('status', 'pending')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        return response()->json([
+            'message' => 'Berhasil mengambil antrean pesanan kasir',
+            'data' => $orders
+        ]);
+    }
+
+    // 2. Kasir mengubah status pesanan
+    public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:pending,diproses,selesai,dibatalkan',
+            'payment_status' => 'string|in:pending,dibayar,gagal'
+        ]);
+
+        $order = Order::find($id);
+
+        if (!$order) {
+            return response()->json(['message' => 'Pesanan tidak ditemukan'], 404);
+        }
+
+        $order->update([
+            'status' => $request->status,
+            'payment_status' => $request->payment_status ?? $order->payment_status
+        ]);
+
+        return response()->json([
+            'message' => 'Status pesanan berhasil diperbarui!',
+            'data' => $order
         ]);
     }
 }
