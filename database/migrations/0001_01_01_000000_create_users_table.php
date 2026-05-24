@@ -17,7 +17,14 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+
+            // ROLE USER
             $table->string('role')->default('customer');
+
+            // STATUS PEGAWAI / USER
+            $table->enum('status', ['active', 'resigned', 'suspended'])
+                ->default('active');
+
             $table->rememberToken();
             $table->timestamps();
         });

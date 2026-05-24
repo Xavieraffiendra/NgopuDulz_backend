@@ -6,6 +6,7 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\CashierController;
+use App\Http\Controllers\API\AdminController;
 
 // --- RUTE PUBLIK (Tidak butuh Token) ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -29,4 +30,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Kasir: Manajemen Antrean
     Route::get('/cashier/orders', [CashierController::class, 'getPendingOrders']);
     Route::put('/cashier/orders/{id}/status', [CashierController::class, 'updateStatus']);
+
+    Route::put('/admin/users/{id}', [AdminController::class, 'updateUser']);
 });

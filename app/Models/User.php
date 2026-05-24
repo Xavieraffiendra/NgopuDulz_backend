@@ -22,6 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role', // Menentukan hak akses ('customer', 'cashier', 'admin')
+        'status',
     ];
 
     /**
