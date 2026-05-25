@@ -5,6 +5,7 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\AdminController;
+use Illuminate\Http\Request;
 
 // RUTE PUBLIK (Tidak butuh Token)
 Route::post('/register', [AuthController::class, 'register']);
@@ -72,4 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/admin/products/{id}', [ProductController::class, 'update']);
     Route::delete('/admin/products/{id}', [ProductController::class, 'destroy']);
 
+});
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+    return $request->user();
 });
