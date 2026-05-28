@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 // RUTE PUBLIK (Tidak butuh Token)
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-
+Route::post('/midtrans/callback', [App\Http\Controllers\API\OrderController::class, 'callback']);
 // RUTE TERLINDUNGI (Wajib kirim Token dari hasil Login)
 Route::middleware('auth:sanctum')->group(function () {
 

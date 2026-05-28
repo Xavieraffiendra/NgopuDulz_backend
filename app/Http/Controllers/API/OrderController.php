@@ -7,56 +7,83 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Midtrans\Config;
+use Midtrans\Snap;
 
 class OrderController extends Controller
 {
+    // Fungsi Checkout Pesanan dari Android
     // Fungsi Checkout Pesanan dari Android
     public function store(Request $request)
     {
         $request->validate([
             'total_price' => 'required|integer',
             'items' => 'required|array',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => 'required', 
             'items.*.qty' => 'required|integer|min:1',
             'items.*.subtotal' => 'required|integer',
         ]);
 
-        // Mengaktifkan Database Transaction demi integritas data relasional
-        DB::beginTransaction();
+        // 1. TRANSACTION DIMATIKAN
+        // DB::beginTransaction();
 
         try {
-            // 1. Simpan data ke tabel induk (orders)
             $order = Order::create([
-                'user_id' => \Illuminate\Support\Facades\Auth::id(), // Mengambil ID pengguna dari Bearer Token
+                // 👇 TYPO SUDAH DIPERBAIKI 👇
+                'user_id' => $request->user()?->id,
                 'total_price' => $request->total_price,
                 'status' => 'pending',
-                'payment_method' => $request->payment_method ?? 'Cash',
+                'payment_method' => 'Midtrans',
                 'payment_status' => 'pending'
             ]);
 
-            // 2. Looping array items untuk disimpan ke tabel anak (order_items)
             foreach ($request->items as $item) {
                 OrderItem::create([
-                    'order_id' => $order->id, // Menghubungkan ID dari order yang baru dibuat
+                    'order_id' => $order->id,
                     'product_id' => $item['product_id'],
                     'qty' => $item['qty'],
-                    'selected_variants' => $item['selected_variants'] ?? null, // Otomatis dicast jadi array oleh model
                     'subtotal' => $item['subtotal']
                 ]);
             }
 
-            // Jika semua proses insert sukses, kunci data di MySQL
-            DB::commit();
+            // ==========================================
+            // 🔥 KONEKSI KE MIDTRANS DIMULAI DI SINI 🔥
+            // ==========================================
+            Config::$serverKey = env('MIDTRANS_SERVER_KEY');
+            Config::$isProduction = env('MIDTRANS_IS_PRODUCTION', false);
+            Config::$isSanitized = true;
+            Config::$is3ds = true;
+
+            // 👇 TAMBAHKAN 2 BARIS AJAIB INI BUAT BYPASS SSL DI WINDOWS 👇
+            Config::$curlOptions[CURLOPT_SSL_VERIFYHOST] = 0;
+            Config::$curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
+            Config::$curlOptions[CURLOPT_HTTPHEADER] = [];
+            $params = [
+                'transaction_details' => [
+                    'order_id' => 'NGOPU-' . $order->id . '-' . time(), 
+                    'gross_amount' => $order->total_price,
+                ],
+                'customer_details' => [
+                    'first_name' => $request->user()?->name ?? 'Pelanggan',
+                    'email' => $request->user()?->email ?? 'pelanggan@ngopidulz.com',
+                ],
+            ];
+
+            $snapUrl = Snap::createTransaction($params)->redirect_url;
+
+            // 2. COMMIT DIMATIKAN (Wajib ditambahkan //)
+            // DB::commit();
 
             return response()->json([
                 'message' => 'Pesanan berhasil dibuat!',
                 'order_id' => $order->id,
-                'total_price' => $order->total_price
+                'total_price' => $order->total_price,
+                'payment_url' => $snapUrl 
             ], 201);
 
         } catch (\Exception $e) {
-            // Jika ada satu saja yang gagal/error, batalkan semua perubahan di DB
-            DB::rollback();
+            // 3. ROLLBACK DIMATIKAN (Wajib ditambahkan //)
+            // DB::rollback();
 
             return response()->json([
                 'message' => 'Gagal memproses transaksi',
@@ -115,5 +142,34 @@ class OrderController extends Controller
             'message' => 'Status pesanan berhasil diperbarui!',
             'data' => $order
         ]);
+    }
+    public function callback(Request $request)
+    {
+        // 1. Verifikasi kecocokan kunci keamanan (biar nggak di-hack)
+        $serverKey = env('MIDTRANS_SERVER_KEY');
+        $hashed = hash("sha512", $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
+
+        if ($hashed == $request->signature_key) {
+            
+            // 2. Jika statusnya sukses dibayar (settlement / capture)
+            if ($request->transaction_status == 'capture' || $request->transaction_status == 'settlement') {
+                
+                // 3. Pecah ID pesanan (Dari 'NGOPU-12-123456' jadi '12' saja)
+                $orderIdArray = explode('-', $request->order_id);
+                $realOrderId = $orderIdArray[1];
+
+                // 4. Cari pesanannya di database dan ubah statusnya
+                $order = Order::find($realOrderId);
+                if ($order) {
+                    $order->update([
+                        'payment_status' => 'dibayar',
+                        'status' => 'diproses' // Langsung masuk antrean biar kasir bisa bikin kopinya
+                    ]);
+                }
+            }
+        }
+        
+        // Wajib balas Midtrans dengan 200 OK biar dia berhenti ngirim notifikasi
+        return response()->json(['message' => 'Callback diterima']);
     }
 }
